@@ -1,1 +1,144 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>新闻页懒加载瀑布流布局</title>
+    <script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        main {
+            position: relative;
+            width: 900px;
+            margin: 0 auto;
+        }
+        .single-news {
+            width: 280px;
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        .news-preview {
+            width: 100%;
+        }
+        .news-message>dt {
+            margin: 10px 0 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ccc;
+            font-weight: bold;
+        }
+        .news-message>dl {
+            font-size: 12px;
+            line-height: 1.8;
+            color: #777371;
+        }
+    </style>
+</head>
+<body>
+    <main></main>
+    <div class="loading"></div>
+</body>
+<script>
+    // 1.获取图片
+    // 2.瀑布流方式渲染
+    // 3.滚动到底部加载新的图片
+    var width = 300,
+        maxWidth = $('main').width(),
+        col = Math.floor(maxWidth / width);
+        clientHeightArr = [],
+        perPageCount = 10,
+        curPage = 1;
+    for(var i=0;i<col;i++) {
+        clientHeightArr.push(0);
+    }
+    getData();
+    $(window).scroll(throttle(function() {
+        if(isShow($('.loading'))) {
+            console.log('show');
+            getData();
+        }
+    }, 300));
+    function getData() {
+        $.ajax({
+            url: 'http://platform.sina.com.cn/slide/album_tech',
+            dataType: 'jsonp',
+            jsonp:"jsoncallback",
+            data: {
+                app_key: '1271687855',
+                num: perPageCount,
+                page: curPage
+            }
+        }).done(function(res){
+            if(res && res.status && res.status.code==='0') {
+                handleData(res.data);
+                curPage++;
+            } else {
+                console.log('数据获取失败');
+            }
+        })
+    }
+    function handleData(data) {
+        // 1.用数据生成节点
+        // 2.将节点用瀑布流的方式渲染上去
+        $.each(data, function(index, news) {
+            var $node = getNode(news);
+            $node.find('img').load(function() {
+                waterFallRender($node);
+            })
+        })
+    }
+    function getNode(data) {
+        var node = '\n' +
+            '        <div class="single-news">\n' +
+            '            <a href="' + data.url + '"><img class="news-preview" src="' + data.img_url + '"></a>\n' +
+            '            <div class="news-message">\n' +
+            '                <dt>' + data.short_name + '</dt>\n' +
+            '                <dl>' + data.short_intro + '</dl>\n' +
+            '            </div>\n' +
+            '        </div>';
+        return $(node);
+    }
+    function waterFallRender($node) {
+        // 1.先计算列数
+        // 2.找到高度最小值的列数，放入
+        var minIndex = findMin(clientHeightArr);
+        $node.css({
+            position: 'absolute',
+            top: clientHeightArr[minIndex],
+            left: minIndex*width
+        });
+        $('main').append($node);
+        clientHeightArr[minIndex] += $node.outerHeight(true); // 记得加入之后才有高度
+        $('main').height(Math.max.apply(null, clientHeightArr)); // 没有高度需要手动设定高度
+    }
+    function findMin(arr) {
+        var minIndex = 0,
+            minValue = arr[0];
+        for(var i=1;i<arr.length;i++) {
+            if(minValue>arr[i]) {
+                minIndex = i;
+                minValue = arr[i];
+            }
+        }
+        return minIndex;
+    }
+    function isShow($node) {
+        return $node.offset().top <= $(window).height() + $(window).scrollTop();
+    }
+    function throttle(fn, delay) {
+        var isHandleFinished = true;
+        return function () {
+            if(isHandleFinished===false) {return}
+            var _this = this;
+            isHandleFinished = false;
+            setTimeout(function () {
+                fn.apply(_this, arguments);
+                isHandleFinished = true;
+            }, delay);
+        }
+    }
+</script>
